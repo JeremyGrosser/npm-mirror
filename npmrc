@@ -1,0 +1,2 @@
+registry = http://archive.example.com/npm
+strict-ssl = false
