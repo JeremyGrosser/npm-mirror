@@ -22,6 +22,13 @@ log.addHandler(handler)
 log.setLevel(logging.INFO)
 
 
+def joinpath(*paths):
+    path = os.path.abspath(os.path.join(*paths))
+    if not path.startswith(MIRROR_PATH):
+        raise ValueError('Normalized path %s is not inside MIRROR_PATH %s' % (path, MIRROR_PATH))
+    return path
+
+
 def request(url):
     log.debug('GET %s', url)
     req = urllib2.Request(url, headers={
@@ -36,7 +43,7 @@ def request(url):
 
 
 def get_package_index(force_download=False):
-    last_update_path = os.path.join(MIRROR_PATH, 'last_update')
+    last_update_path = joinpath(MIRROR_PATH, 'last_update')
     if not force_download:
         try:
             last_update = open(last_update_path, 'r').read().strip('\r\n\t ')
@@ -63,7 +70,7 @@ def get_package_info(package, download=True):
         res['_fullmeta'] = True
         return res
     else:
-        with open(os.path.join(MIRROR_PATH, package, 'package.json'), 'r') as fd:
+        with open(joinpath(MIRROR_PATH, package, 'package.json'), 'r') as fd:
             return json.load(fd)
 
 
@@ -79,7 +86,7 @@ def update_package(package, meta):
         log.error('No versions field in package info for %s', package)
         return None
 
-    package_path = os.path.join(MIRROR_PATH, package.encode('utf8'))
+    package_path = joinpath(MIRROR_PATH, package.encode('utf8'))
     if not os.path.exists(package_path):
         log.debug('Creating directory %s', package_path)
         os.makedirs(package_path)
@@ -88,14 +95,14 @@ def update_package(package, meta):
         disturl = versioninfo['dist']['tarball']
         digest = versioninfo['dist']['shasum']
         tarname = disturl.rsplit('/', 1)[1]
-        tarpath = os.path.join(package_path, tarname)
+        tarpath = joinpath(package_path, tarname)
         meta['versions'][version]['dist']['tarball'] = '%s/%s/%s' % (
             MIRROR_URL,
             package,
             tarname
         )
 
-        path = os.path.join(package_path, version)
+        path = joinpath(package_path, version)
         with open(path, 'w') as fd:
             log.debug('Writing %s', path)
             fd.write(json.dumps(meta['versions'][version], separators=(',', ':')))
@@ -123,7 +130,7 @@ def update_package(package, meta):
             del meta['versions'][version]
             continue
 
-        path = os.path.join(package_path, 'package.json')
+        path = joinpath(package_path, 'package.json')
         with open(path, 'w') as fd:
             log.debug('Writing %s', path)
             json.dump(meta, fd, separators=(',', ':'))
@@ -131,9 +138,9 @@ def update_package(package, meta):
 
 
 def should_update_package(name, meta):
-    package_path = os.path.join(MIRROR_PATH, name.encode('utf8'))
-    if os.path.exists(os.path.join(package_path, 'package.json')):
-        existing = json.load(open(os.path.join(package_path, 'package.json'), 'r'))
+    package_path = joinpath(MIRROR_PATH, name.encode('utf8'))
+    if os.path.exists(joinpath(package_path, 'package.json')):
+        existing = json.load(open(joinpath(package_path, 'package.json'), 'r'))
         if 'dist-tags' in meta and 'latest' in meta['dist-tags']:
             latest_version = meta['dist-tags']['latest']
         else:
@@ -198,7 +205,7 @@ def main():
     log.info('%i packages to update', len(packages))
 
     for package, meta in sorted(packages.iteritems()):
-        if package.startswith('_'):
+        if package.startswith('_') or package.find('/') != -1:
             continue
         if package in PACKAGE_BLACKLIST:
             continue
